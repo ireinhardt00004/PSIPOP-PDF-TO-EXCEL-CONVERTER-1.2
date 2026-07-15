@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>PSIPOP PDF to Excel Converter Version 1.2</title>
+  <link rel="icon" href="https://img.icons8.com/color/48/pdf.png" type="image/png">
+  <script src="./JS/build/pdf.js"></script>
+  <script src="./JS/code.js"></script>"
+  <script src="./JS/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="./CSS/style.css">
+    <style>
+   #backToTop{
+    position:fixed;
+    right:20px;
+    bottom:20px;
+    width:56px;
+    height:56px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    border:none;
+    border-radius:50%;
+    background:linear-gradient(135deg,#2563eb,#1d4ed8);
+    color:#fff;
+    font-size:24px;
+    line-height:1;      /* Important */
+    padding:0;          /* Important */
+    cursor:pointer;
+
+    box-shadow:0 10px 25px rgba(0,0,0,.25);
+    transition:.3s;
+
+    opacity:0;
+    visibility:hidden;
+    transform:translateY(20px) scale(.9);
+    z-index:9999;
+}
+
+#backToTop.show{
+    opacity:1;
+    visibility:visible;
+    transform:translateY(0) scale(1);
+}
+
+#backToTop:hover{
+    background:linear-gradient(135deg,#3b82f6,#2563eb);
+    transform:translateY(-4px) scale(1.08);
+    box-shadow:0 15px 30px rgba(37,99,235,.45);
+}
+
+#backToTop:active{
+    transform:scale(.95);
+}
+
+#backToTop:focus{
+    outline:3px solid rgba(59,130,246,.4);
+    outline-offset:4px;
+}
+
+/* Mobile */
+@media (max-width:600px){
+    #backToTop{
+        width:50px;
+        height:50px;
+        font-size:20px;
+        right:15px;
+        bottom:15px;
+    }
+}
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- Header -->
+    <div class="hero">
+
+        <div class="hero-icon">📄</div>
+
+        <div class="hero-text">
+            <h1>PSIPOP PDF to Excel Converter</h1>
+
+            <p>
+                Convert PSIPOP Plantilla PDF files into structured Excel workbooks
+                with fast, accurate, and reliable data extraction.
+            </p>
+
+            <div class="badges">
+                <span>PDF Only</span>
+                <span>One File Per Conversion</span>
+                <span>Fast Parsing</span>
+                <span>Excel Export</span>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Upload -->
+
+    <div id="dropZone" class="upload-area"
+        onclick="document.getElementById('pdfUpload').click()">
+
+        <input
+            type="file"
+            id="pdfUpload"
+            accept=".pdf,application/pdf">
+
+        <div class="upload-icon">
+            ☁️
+        </div>
+
+        <h3>Drag & Drop your PSIPOP PDF</h3>
+
+        <p>
+            or click anywhere to browse
+        </p>
+
+        <small>
+            Supported Format: PDF (.pdf)<br>
+            Maximum Upload: <b>1 file per conversion</b>
+        </small>
+
+        <div id="selectedFile">
+            No file selected
+        </div>
+
+    </div>
+
+    <!-- Buttons -->
+
+    <div class="button-group">
+
+        <button class="primary" onclick="convertPDF()">
+            ⚡ Convert PDF
+        </button>
+
+        <button class="success" onclick="exportExcel()">
+            📥 Export Excel
+        </button>
+
+        <button class="danger" onclick="resetPage()">
+            🔄 Reset
+        </button>
+
+    </div>
+
+    <!-- Progress -->
+
+    <div class="status-card">
+
+        <div class="status-header">
+            <span>Processing Status</span>
+            <span class="status-badge">Ready</span>
+        </div>
+
+        <div id="loading">
+            <div id="progressBar"></div>
+        </div>
+
+        <div id="progressText">
+            Waiting for PDF upload...
+        </div>
+
+    </div>
+
+    <!-- Record Counter -->
+
+    <div id="recordCount">
+        No records loaded.
+    </div>
+
+    <!-- Search -->
+
+    <input
+        id="tableSearch"
+        type="text"
+        placeholder="🔍 Search employee, position, item number..."
+        onkeyup="filterTable()">
+
+    <!-- Preview -->
+
+    <div id="preview">
+
+        <div class="empty-state">
+
+            <div class="empty-icon">
+                📄
+            </div>
+
+            <h3>No Preview Available</h3>
+
+            <p>
+                Upload and convert a PSIPOP PDF to preview the extracted data.
+            </p>
+
+        </div>
+
+    </div>
+
+</div>
+    <footer class="app-footer">
+
+        <div class="footer-divider"></div>
+
+        <h3>PSIPOP PDF to Excel Converter</h3>
+
+        <p>Version 1.2</p>
+
+        <p>Developed by <strong>Kevz Maceda</strong></p>
+
+        <p>Schools Division Office of Cavite Province</p>
+
+        <small>
+            © 2026 All Rights Reserved
+        </small>
+
+    </footer>
+  
+    <button id="backToTop" aria-label="Back to Top">
+    &#8593;
+</button>
+   
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "./JS/build/pdf.worker.js";
+
+let structuredRows = [];
+
+function renderPreview(rows) {
+
+    let html = '<table id="preview_table">';
+
+    let filled = 0;
+    let vacant = 0;
+
+    rows.forEach((row, i) => {
+
+        html += "<tr>";
+
+        row.forEach((cell, j) => {
+
+            // Header row
+            if (i === 0) {
+                html += `<th>${cell}</th>`;
+                return;
+            }
+
+            let style = "";
+
+            // Bold first column (Plantilla Assignment)
+            if (j === 0) {
+                style += "font-weight:bold;";
+            }
+
+            // Highlight VACANT in Name of Incumbent column
+            if (j === 11 && String(cell).trim().toUpperCase() === "VACANT") {
+                style += "font-weight:bold;color:#dc2626;background:#fee2e2;";
+            }
+
+            html += `<td style="${style}">${cell}</td>`;
+
+        });
+
+        // Count filled and vacant records (skip header)
+        if (i > 0) {
+
+            if (String(row[11]).trim().toUpperCase() === "VACANT") {
+                vacant++;
+            } else {
+                filled++;
+            }
+
+        }
+
+        html += "</tr>";
+
+    });
+
+    html += "</table>";
+
+    // Render table
+    document.getElementById("preview").innerHTML = html;
+
+    // Calculate statistics
+    const totalRecords = rows.length - 1;
+
+    const filledPercent = totalRecords > 0
+        ? ((filled / totalRecords) * 100).toFixed(1)
+        : "0.0";
+
+    const vacantPercent = totalRecords > 0
+        ? ((vacant / totalRecords) * 100).toFixed(1)
+        : "0.0";
+
+    // Display summary
+    document.getElementById("recordCount").innerHTML = `
+        <b>Total Records:</b> ${totalRecords}
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+
+        <span style="color:#16a34a;">
+            <b>Filled:</b> ${filled} (${filledPercent}%)
+        </span>
+
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+
+        <span style="color:#dc2626;">
+            <b>Vacant:</b> ${vacant} (${vacantPercent}%)
+        </span>
+    `;
+}
+
+// Group lines until next OSEC
+function groupRows(lines) {
+  const grouped = [];
+  let current = "";
+  lines.forEach(line => {
+    if (/^OSEC-/i.test(line)) {
+      if (current) grouped.push(current.trim());
+      current = line;
+    } else {
+      current += " " + line.trim();
+    }
+  });
+  if (current) grouped.push(current.trim());
+  return grouped;
+}
+
+async function convertPDF() {
+
+    const file = document.getElementById("pdfUpload").files[0];
+
+    if (!file) {
+        alert("Upload a PDF first.");
+        return;
+    }
+
+    originalFileName = file.name;
+
+    document.getElementById("preview").innerHTML =
+        "<p>Processing... please wait...</p>";
+
+    const reader = new FileReader();
+
+    reader.onload = async function () {
+
+        const pdfData = new Uint8Array(this.result);
+
+        const pdf = await pdfjsLib.getDocument({
+            data: pdfData
+        }).promise;
+
+        structuredRows = [[
+            "Plantilla Assignment",
+            "Item Number",
+            "Position Title",
+            "Salary Grade",
+            "Authorized Salary",
+            "Actual Salary",
+            "Salary Step",
+            "Area Code",
+            "Area Type",
+            "Area Level",
+            "P/P/A Attribution",
+            "Name of Incumbent",
+            "Sex",
+            "Date of Birth",
+            "TIN",
+            "Date of Original Appointment",
+            "Date of Last Promotion",
+            "Status",
+            "Eligibility"
+        ]];
+
+        const eligibilities = [
+            "LET",
+            "PBET",
+            "RA1080",
+            "CSC",
+            "CESO",
+            "CESE",
+            "BAR",
+            "PD907",
+            "CSP",
+            "CSSP",
+            "CS",
+            "PROFESSIONAL",
+            "CSEE",
+            "O",
+            "NONE"
+        ];
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+
+            const page = await pdf.getPage(pageNum);
+
+            const textContent = await page.getTextContent();
+
+            const pageText = textContent.items
+                .map(item => item.str)
+                .join(" ");
+
+            console.log(pageText);
+
+            const school = extractSchoolName(pageText);
+
+            console.log("SCHOOL =", school);
+
+            //--------------------------------------------------
+            // CLEAN
+            //--------------------------------------------------
+
+            const cleanedText = pageText
+                .replace(/This text provides space before the ff\. row/gi, "")
+                .replace(/\s+/g, " ")
+                .trim();
+
+            const tokens = cleanedText.split(/\s+/);
+
+            //--------------------------------------------------
+            // Find employee section
+            //--------------------------------------------------
+
+            const totalIndex = tokens.findIndex(t => t === "Total");
+
+            if (totalIndex === -1)
+                continue;
+
+            let i = totalIndex;
+
+            while (
+                i < tokens.length &&
+                tokens[i] !== "Subtotal" &&
+                !(tokens[i] === "Grand" && tokens[i + 1] === "Total")
+            ) {
+
+                //--------------------------------------------------
+                // FILLED RECORD
+                //--------------------------------------------------
+
+                if (
+                    eligibilities.includes(tokens[i]) &&
+                    /^\d{12}$/.test(tokens[i + 1] || "")
+                ) {
+
+                    let row = [];
+
+                    row.push(tokens[i++]); // eligibility
+
+                    while (i < tokens.length) {
+
+                        if (
+                            eligibilities.includes(tokens[i]) &&
+                            /^\d{12}$/.test(tokens[i + 1] || "")
+                        ) {
+                            break;
+                        }
+
+                        if (
+                            /^\d+$/.test(tokens[i]) &&
+                            tokens[i + 1]?.startsWith("OSEC-")
+                        ) {
+
+                            // If this Area Code belongs to another employee
+                            // stop ONLY if we've already parsed an OSEC.
+
+                            if (row.some(t => t.startsWith("OSEC-")))
+                                break;
+
+                        }
+
+                        if (tokens[i] === "Subtotal")
+                            break;
+
+                        row.push(tokens[i]);
+                        i++;
+
+                    }
+
+                    console.log("FILLED", row);
+
+                    const parsed = parseRow(row, school);
+
+                    if (parsed)
+                        structuredRows.push(parsed);
+
+                    continue;
+
+                }
+
+                //--------------------------------------------------
+                // VACANT RECORD
+                //--------------------------------------------------
+
+                if (
+                    /^\d+$/.test(tokens[i]) &&
+                    tokens[i + 1]?.startsWith("OSEC-")
+                ) {
+
+                    let row = [];
+
+                    while (i < tokens.length) {
+
+                        if (
+                            eligibilities.includes(tokens[i]) &&
+                            /^\d{12}$/.test(tokens[i + 1] || "")
+                        )
+                            break;
+
+                        if (
+                            row.length &&
+                            /^\d+$/.test(tokens[i]) &&
+                            tokens[i + 1]?.startsWith("OSEC-")
+                        )
+                            break;
+
+                        if (tokens[i] === "Subtotal")
+                            break;
+
+                        row.push(tokens[i]);
+                        i++;
+
+                    }
+
+                    console.log("VACANT", row);
+
+                    const parsed = parseRow(row, school);
+
+                    if (parsed)
+                        structuredRows.push(parsed);
+
+                    continue;
+
+                }
+
+                i++;
+
+            }
+
+            const percent = Math.round(
+                pageNum / pdf.numPages * 100
+            );
+
+            document.getElementById("progressBar").style.width =
+                percent + "%";
+
+            document.getElementById("progressText").innerText =
+                `Processing ${pageNum}/${pdf.numPages} (${percent}%)`;
+
+        }
+
+        structuredRows = structuredRows.filter(Boolean);
+
+        console.table(structuredRows);
+
+        renderPreview(structuredRows);
+
+    };
+
+    reader.readAsArrayBuffer(file);
+
+}
+
+function extractSchoolName(pageText) {
+
+    const match = pageText.match(
+        /(\d+\.\d+)\s+(.+?)\s+Total\s+Positions\s*:/is
+    );
+
+    if (!match) return "";
+
+    return match[2]
+        .replace(/\s+/g, " ")
+        .trim()
+        .toUpperCase();
+
+}
+
+function parseRow(tokens, school) {
+
+    console.log("TOKENS", tokens);
+
+    if (!Array.isArray(tokens) || !tokens.length)
+        return null;
+
+    //------------------------------------------
+    // Helper
+    //------------------------------------------
+
+    function normalizeDate(dateStr) {
+
+        if (!dateStr) return "";
+
+        const m = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{2})$/);
+
+        if (!m) return dateStr;
+
+        let year = Number(m[3]);
+
+        year = year < 50 ? 2000 + year : 1900 + year;
+
+        return `${m[1]}/${m[2]}/${year}`;
+    }
+
+    //------------------------------------------
+    // Locate Item Number
+    //------------------------------------------
+
+    const itemIndex = tokens.findIndex(t => t.startsWith("OSEC-"));
+
+    if (itemIndex === -1)
+        return null;
+
+    const itemNumber = tokens[itemIndex];
+
+    //------------------------------------------
+    // Locate "-"
+    //------------------------------------------
+
+    const dash = tokens.indexOf("-", itemIndex);
+    console.log(tokens.slice("TOKEN SLICE:", dash, dash + 12));
+
+    if (dash === -1)
+        return null;
+
+    //------------------------------------------
+    // Salary
+    //------------------------------------------
+
+    const actual = tokens[itemIndex + 1] || "";
+    const authorized = tokens[itemIndex + 2] || "";
+
+    //------------------------------------------
+    // Position
+    //------------------------------------------
+
+    let position = tokens
+        .slice(itemIndex + 3, dash)
+        .join(" ");
+
+    let offset = 0;
+
+    if (tokens[dash + 2] === "(CT)") {
+
+        position += " (CT)";
+        offset = 1;
+
+    }
+
+    const salarygrade = tokens[dash + 1] || "";
+    const step = tokens[dash + 2 + offset] || "";
+
+    //------------------------------------------
+    // Remaining tokens
+    //------------------------------------------
+
+    const beforeItem = tokens.slice(0, itemIndex);
+
+    // after SG and Step comes Area Type and Area Level
+    let remaining = tokens.slice(dash + 3 + offset);
+
+    remaining = remaining.filter(t =>
+        ![
+            "This",
+            "text",
+            "provides",
+            "space",
+            "before",
+            "the",
+            "ff.",
+            "row"
+        ].includes(t)
+    );
+
+    //------------------------------------------
+    // Remove footer
+    //------------------------------------------
+
+    const stopWords = [
+        "Subtotal",
+        "Grand",
+        "Remarks:",
+        "Department",
+        "Human",
+        "APPROVED"
+    ];
+
+    const stopIndex = remaining.findIndex(t =>
+        stopWords.includes(t)
+    );
+
+    if (stopIndex >= 0)
+        remaining = remaining.slice(0, stopIndex);
+
+    //------------------------------------------
+    // Locate PPA
+    //------------------------------------------
+
+    let attribution = "";
+    let beforePPA = [];
+
+    const ppaIndex = remaining.findIndex(t =>
+        /^\d{15}$/.test(t)
+    );
+
+    if (ppaIndex >= 0) {
+
+        attribution = remaining[ppaIndex];
+
+        beforePPA = remaining.slice(0, ppaIndex);
+
+    }
+    else {
+
+        beforePPA = [...remaining];
+
+    }
+
+    //------------------------------------------
+    // Variables
+    //------------------------------------------
+
+    let type = "";
+    let level = "";
+    let name = "";
+
+    let eligibility = "";
+    let tin = "";
+    let dob = "";
+    let sex = "";
+    let status = "";
+    let appointment = "";
+    let promotion = "";
+    let code = "";
+
+    //------------------------------------------
+    // Filled or Vacant
+    //------------------------------------------
+
+    if (beforeItem.length >= 8) {
+
+        eligibility = beforeItem[0];
+        tin = beforeItem[1];
+        dob = normalizeDate(beforeItem[2]);
+        sex = beforeItem[3];
+        status = beforeItem[4];
+        appointment = normalizeDate(beforeItem[5]);
+        promotion = normalizeDate(beforeItem[6]);
+        code = beforeItem[7];
+
+    }
+    else {
+
+        code = beforeItem[0] || "";
+
+    }
+
+    //------------------------------------------
+    // Area Type / Area Level / Name
+    //------------------------------------------
+
+    if (beforePPA.length >= 2) {
+        console.log("beforePPA =", beforePPA);
+        level = beforePPA.shift() || "";
+        type = beforePPA.shift() || "";
+        name = beforePPA.join(" ").trim();
+
+    }
+
+    if (!name)
+        name = "VACANT";
+
+    //------------------------------------------
+    // Debug
+    //------------------------------------------
+
+    console.log({
+        itemNumber,
+        position,
+        salarygrade,
+        authorized,
+        actual,
+        step,
+        code,
+        type,
+        level,
+        attribution,
+        name,
+        sex,
+        dob,
+        tin,
+        appointment,
+        promotion,
+        status,
+        eligibility
+    });
+    //------------------------------------------
+    // Return
+    //------------------------------------------
+
+    return [
+        school,
+        itemNumber,
+        position,
+        salarygrade,
+        authorized,
+        actual,
+        step,
+        code,
+        type,
+        level,
+        attribution,
+        name,
+        sex,
+        dob,
+        tin,
+        appointment,
+        promotion,
+        status,
+        eligibility
+    ];
+
+}
+
+  function normalizeDate(dateStr) {
+
+    if (!dateStr) return "";
+
+    const match = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{2})$/);
+
+    if (!match) return dateStr;
+
+    let year = parseInt(match[3]);
+
+    year = year < 50
+        ? 2000 + year
+        : 1900 + year;
+
+    return `${match[1]}/${match[2]}/${year}`;
+}
+
+
+
+function exportExcel() {
+
+    if (structuredRows.length === 0) {
+
+        alert("No data to export.");
+
+        return;
+
+    }
+
+    const worksheet = XLSX.utils.aoa_to_sheet(structuredRows);
+
+    const wb = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(wb, worksheet, "PSIPOP");
+
+    // Remove .pdf extension
+    let excelName = originalFileName || "PSIPOP";
+
+    excelName = excelName.replace(/\.pdf$/i, "");
+
+    XLSX.writeFile(wb, excelName + ".xlsx");
+
+}
+  </script>
+
+  <script>
+let originalFileName = "";
+
+// Elements
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("pdfUpload");
+const selectedFile = document.getElementById("selectedFile");
+
+// ===============================
+// File Picker
+// ===============================
+fileInput.addEventListener("change", function () {
+
+    const file = this.files[0];
+
+    if (!file) {
+        originalFileName = "";
+        selectedFile.textContent = "No file selected";
+        return;
+    }
+
+    originalFileName = file.name;
+    selectedFile.textContent = "📄 " + originalFileName;
+
+});
+
+// ===============================
+// Drag & Drop
+// ===============================
+
+// Prevent browser from opening the file
+["dragenter","dragover","dragleave","drop"].forEach(eventName => {
+
+    dropZone.addEventListener(eventName, function(e){
+
+        e.preventDefault();
+        e.stopPropagation();
+
+    });
+
+});
+
+// Highlight upload area
+["dragenter","dragover"].forEach(eventName => {
+
+    dropZone.addEventListener(eventName, function(){
+
+        dropZone.classList.add("dragover");
+
+    });
+
+});
+
+// Remove highlight
+["dragleave","drop"].forEach(eventName => {
+
+    dropZone.addEventListener(eventName, function(){
+
+        dropZone.classList.remove("dragover");
+
+    });
+
+});
+
+// Handle dropped PDF
+dropZone.addEventListener("drop", function(e){
+
+    const files = e.dataTransfer.files;
+
+    if(files.length === 0) return;
+
+    const file = files[0];
+
+    if(file.type !== "application/pdf"){
+        alert("Please drop a PDF file.");
+        return;
+    }
+
+    // Create DataTransfer object
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(file);
+
+    // Assign dropped file to input
+    fileInput.files = dataTransfer.files;
+
+    originalFileName = file.name;
+    selectedFile.textContent = "📄 " + file.name;
+
+});
+
+// ===============================
+// Search Table
+// ===============================
+function filterTable(){
+
+    let input = document
+        .getElementById("tableSearch")
+        .value
+        .toUpperCase();
+
+    let table = document.querySelector("#preview table");
+
+    if(!table) return;
+
+    let rows = table.getElementsByTagName("tr");
+
+    for(let i=1;i<rows.length;i++){
+
+        let txt = rows[i].innerText.toUpperCase();
+
+        rows[i].style.display =
+            txt.indexOf(input) > -1 ? "" : "none";
+    }
+}
+
+// ===============================
+// Reset
+// ===============================
+function resetPage(){
+     if(confirm("Are you sure you want to reset the application?\n\nAll loaded data will be cleared.")){
+        window.location.reload();
+    }
+}
+// ===============================
+// Back To Top
+// ===============================
+
+const backToTop = document.getElementById("backToTop");
+
+window.addEventListener("scroll", function () {
+
+    if (window.scrollY > 200) {
+        backToTop.classList.add("show");
+    } else {
+        backToTop.classList.remove("show");
+    }
+
+});
+
+backToTop.addEventListener("click", function () {
+
+    window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+    });
+
+});
+  </script>
+</body>
+</html>
